@@ -72,7 +72,36 @@ sleep 2
 # 更新系统并安装必要依赖（不安装 nginx）
 echo "📦 更新系统及安装依赖中..."
 apt-get update -y
-apt-get install -y openssl cron socat curl unzip vim wget
+apt-get install -y openssl cron socat curl unzip vim wget net-tools
+
+# 确保80端口空闲
+echo "🔍 检查并释放80端口..."
+# 停止可能占用80端口的服务
+systemctl stop nginx || true
+systemctl stop apache2 || true
+pkill socat || true
+
+# 检查80端口是否被占用
+if netstat -tuln | grep -q ":80 "; then
+  echo "❗ 80端口仍然被占用，尝试查找并终止相关进程..."
+  # 获取占用80端口的进程ID
+  PID=$(lsof -t -i:80 || true)
+  if [ -n "$PID" ]; then
+    echo "找到占用80端口的进程（PID: $PID），正在终止..."
+    kill -9 "$PID" || true
+  else
+    echo "❌ 无法确定占用80端口的进程，请手动检查并释放80端口后重试"
+    exit 1
+  fi
+fi
+
+# 再次确认80端口是否空闲
+if netstat -tuln | grep -q ":80 "; then
+  echo "❌ 80端口仍然被占用，脚本无法继续执行，请手动检查并释放80端口"
+  exit 1
+else
+  echo "✅ 80端口已确认空闲"
+fi
 
 # 安装acme.sh并注册账号
 echo "🔐 安装 acme.sh 并注册账号..."
@@ -80,14 +109,8 @@ curl https://get.acme.sh | sh -s email="$EMAIL"
 export PATH="$HOME/.acme.sh:$PATH"
 ~/.acme.sh/acme.sh --set-default-ca --server buypass
 
-# 申请证书 - 使用 standalone 模式，确保 80 端口空闲
+# 申请证书 - 使用 standalone 模式
 echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
-# 如果 nginx 可能已经安装并运行，先停止它，避免端口冲突
-systemctl stop nginx || true
-
-echo "杀掉残留的 socat 进程，避免端口冲突"
-pkill socat || true
-
 ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
 chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
