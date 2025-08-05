@@ -72,63 +72,36 @@ sleep 2
 # 更新系统并安装必要依赖（不安装 nginx）
 echo "📦 更新系统及安装依赖中..."
 apt-get update -y
-apt-get install -y openssl cron socat curl unzip vim wget net-tools lsof dnsutils
-
-# 检查域名DNS解析
-echo "🔍 检查域名 $DOMAIN 的DNS解析..."
-SERVER_IP=$(curl -s ifconfig.me)
-DOMAIN_IP=$(dig +short "$DOMAIN" | tail -n 1)
-if [ -z "$DOMAIN_IP" ]; then
-  echo "❌ 域名 $DOMAIN 解析失败，请确保DNS已正确配置！"
-  exit 1
-elif [ "$DOMAIN_IP" != "$SERVER_IP" ]; then
-  echo "❌ 域名 $DOMAIN 解析到的IP ($DOMAIN_IP) 与服务器IP ($SERVER_IP) 不一致！"
-  echo "请检查DNS记录并等待传播后重试。"
-  exit 1
-else
-  echo "✅ 域名 $DOMAIN 正确解析到 $DOMAIN_IP"
-fi
+apt-get install -y openssl cron socat curl unzip vim wget net-tools
 
 # 确保80端口空闲
 echo "🔍 检查并释放80端口..."
 # 停止可能占用80端口的服务
 systemctl stop nginx || true
 systemctl stop apache2 || true
-echo "尝试杀死所有占用80端口的进程..."
-# 多次尝试杀死socat和其他占用80端口的进程
-for i in {1..3}; do
-  pkill -9 socat || true
+pkill socat || true
+
+# 检查80端口是否被占用
+if netstat -tuln | grep -q ":80 "; then
+  echo "❗ 80端口仍然被占用，尝试查找并终止相关进程..."
+  # 获取占用80端口的进程ID
   PID=$(lsof -t -i:80 || true)
   if [ -n "$PID" ]; then
     echo "找到占用80端口的进程（PID: $PID），正在终止..."
     kill -9 "$PID" || true
+  else
+    echo "❌ 无法确定占用80端口的进程，请手动检查并释放80端口后重试"
+    exit 1
   fi
-  sleep 1
-done
+fi
 
-# 检查80端口是否空闲
+# 再次确认80端口是否空闲
 if netstat -tuln | grep -q ":80 "; then
-  echo "❌ 80端口仍然被占用！以下是占用80端口的进程信息："
-  lsof -i:80 || echo "无法获取占用80端口的进程信息"
-  echo "请手动检查并杀死占用80端口的进程（例如使用 'kill -9 <PID>'），然后重试脚本"
-  echo "提示：运行 'lsof -i:80' 或 'netstat -tuln | grep :80' 查看占用情况"
+  echo "❌ 80端口仍然被占用，脚本无法继续执行，请手动检查并释放80端口"
   exit 1
 else
   echo "✅ 80端口已确认空闲"
 fi
-
-# 检查80端口外部可访问性
-echo "🔍 检查80端口外部可访问性..."
-if ! curl -s --connect-timeout 5 http://"$DOMAIN":80 >/dev/null; then
-  echo "⚠️ 警告：无法通过 $DOMAIN 访问80端口，可能是防火墙或安全组限制"
-  echo "请确保防火墙（ufw/iptables）和云服务商安全组允许80端口入站流量"
-fi
-
-# 清理acme.sh残留
-echo "🧹 清理acme.sh可能残留的进程和临时文件..."
-pkill -f acme.sh || true
-rm -rf "/root/.acme.sh/$DOMAIN" || true
-rm -rf "/root/.acme.sh/${DOMAIN}_ecc" || true
 
 # 安装acme.sh并注册账号
 echo "🔐 安装 acme.sh 并注册账号..."
@@ -136,19 +109,9 @@ curl https://get.acme.sh | sh -s email="$EMAIL"
 export PATH="$HOME/.acme.sh:$PATH"
 ~/.acme.sh/acme.sh --set-default-ca --server buypass
 
-# 申请证书 - 使用 standalone 模式，增加调试和超时
+# 申请证书 - 使用 standalone 模式
 echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
-~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256 --debug 2 --challenge-wait 60
-if [ $? -ne 0 ]; then
-  echo "❌ 证书申请失败！请检查以下日志："
-  cat /root/.acme.sh/acme.sh.log
-  echo "建议："
-  echo "1. 确保80端口外部可访问（检查防火墙和安全组）"
-  echo "2. 确认DNS解析正确（dig $DOMAIN）"
-  echo "3. 尝试手动运行以下命令调试："
-  echo "   ~/.acme.sh/acme.sh --issue -d $DOMAIN --standalone -k ec-256 --debug 2"
-  exit 1
-fi
+~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
 chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
 echo "✅ 证书申请完成"
