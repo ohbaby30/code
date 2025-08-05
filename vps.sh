@@ -9,7 +9,7 @@ fi
 
 echo ""
 echo "=============================="
-echo "🚀 Xray+Trojan 一键安装脚本（webroot模式申请证书）"
+echo "🚀 Xray+Trojan 一键安装脚本"
 echo "=============================="
 echo ""
 
@@ -69,33 +69,35 @@ echo ""
 echo "所有输入完成，开始安装部署..."
 sleep 2
 
-# 更新系统及安装必要依赖，包括 nginx
+# 更新系统并安装必要依赖（不安装 nginx）
 echo "📦 更新系统及安装依赖中..."
 apt-get update -y
-apt-get install -y openssl cron socat curl unzip vim wget nginx
+apt-get install -y openssl cron socat curl unzip vim wget
 
-# 确保 nginx 启动并开机自启
-# systemctl enable nginx
-# systemctl start nginx
-
-# 确保 webroot 目录存在，默认 /var/www/html
-if [ ! -d /var/www/html ]; then
-  mkdir -p /var/www/html
-fi
-
-# 安装 acme.sh 并注册账号
+# 安装acme.sh并注册账号
 echo "🔐 安装 acme.sh 并注册账号..."
 curl https://get.acme.sh | sh -s email="$EMAIL"
 export PATH="$HOME/.acme.sh:$PATH"
 ~/.acme.sh/acme.sh --set-default-ca --server buypass
 
-# 使用 webroot 模式申请证书
-echo "📄 为域名 $DOMAIN 使用 webroot 模式申请 ECC 证书..."
-~/.acme.sh/acme.sh --issue -d "$DOMAIN" --webroot /var/www/html -k ec-256
+# 申请证书 - 使用 standalone 模式，确保 80 端口空闲
+echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
+# 如果 nginx 可能已经安装并运行，先停止它，避免端口冲突
+systemctl stop nginx || true
 
+echo "杀掉残留的 socat 进程，避免端口冲突"
+pkill socat || true
+
+~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
 chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
 echo "✅ 证书申请完成"
+
+# 申请完证书后安装 nginx
+echo "📦 安装 nginx..."
+apt-get install -y nginx
+systemctl enable nginx
+systemctl start nginx
 
 # 安装 xray
 echo "📦 安装 xray..."
@@ -170,9 +172,11 @@ cat > /usr/local/etc/xray/config.json <<EOF
 }
 EOF
 
+echo "✅ 配置文件写入完成"
+
 # 设置 xray 开机自启
+echo "🚀 设置 xray 开机自启..."
 systemctl enable xray
-systemctl enable nginx
 
 echo ""
 echo "🎉 安装完成！请执行命令启动服务："
