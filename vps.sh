@@ -6,12 +6,6 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# 安装 whiptail（如果未安装）
-if ! command -v whiptail &> /dev/null; then
-  echo "安装 whiptail 用于对话框..."
-  apt-get update && apt-get install -y whiptail
-fi
-
 # 第一步：更新系统并安装必要工具
 echo "正在更新系统并安装必要工具..."
 apt-get update
@@ -19,7 +13,7 @@ apt-get install -y openssl cron socat curl unzip vim wget
 
 # 第二步：安装 acme.sh 并申请证书
 echo "正在安装 acme.sh..."
-curl https://get.acme.sh | sh -s email=xxxxx@xxx.com
+curl https://get.acme.sh | sh -s email=x@x.xxx
 if [ ! -f ~/.acme.sh/acme.sh ]; then
   echo "acme.sh 安装失败，请检查网络或手动安装！"
   exit 1
@@ -27,14 +21,13 @@ fi
 source ~/.bashrc
 acme.sh --set-default-ca --server buypass
 
-# 使用 whiptail 弹窗让用户输入域名
-DOMAIN=$(whiptail --inputbox "请输入您的域名（例如 example.com）" 10 40 3>&1 1>&2 2>&3)
-if [ $? -ne 0 ] || [ -z "$DOMAIN" ]; then
-  echo "错误：域名不能为空或用户取消了输入！"
+# 提示用户输入域名并替换到命令中
+echo "请输入您的域名（例如 example.com）："
+read DOMAIN
+if [ -z "$DOMAIN" ]; then
+  echo "错误：域名不能为空！"
   exit 1
 fi
-
-# 申请证书
 echo "正在为 $DOMAIN 申请证书..."
 /root/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
 
@@ -56,17 +49,20 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 # 第五步：修改 xray 配置文件
 echo "正在配置 xray..."
 
-# 使用 whiptail 弹窗让用户输入 VLESS ID
-VLESS_ID=$(whiptail --inputbox "请输入 VLESS 的客户端 ID（建议使用 UUID，例如 550e8400-e29b-41d4-a716-446655440000）" 10 60 3>&1 1>&2 2>&3)
-if [ $? -ne 0 ] || [ -z "$VLESS_ID" ]; then
-  echo "错误：VLESS ID 不能为空或用户取消了输入！"
+# 提示用户输入 VLESS ID
+echo "请输入 VLESS 的客户端 ID（建议使用 UUID，例如 550e8400-e29b-41d4-a716-446655440000）："
+read VLESS_ID
+if [ -z "$VLESS_ID" ]; then
+  echo "错误：VLESS ID 不能为空！"
   exit 1
 fi
 
-# 使用 whiptail 弹窗让用户输入 Trojan 密码
-TROJAN_PASSWORD=$(whiptail --passwordbox "请输入 Trojan 密码（建议使用复杂密码）" 10 40 3>&1 1>&2 2>&3)
-if [ $? -ne 0 ] || [ -z "$TROJAN_PASSWORD" ]; then
-  echo "错误：Trojan 密码不能为空或用户取消了输入！"
+# 提示用户输入 Trojan 密码
+echo "请输入 Trojan 密码（建议使用复杂密码）："
+read -s TROJAN_PASSWORD
+echo
+if [ -z "$TROJAN_PASSWORD" ]; then
+  echo "错误：Trojan 密码不能为空！"
   exit 1
 fi
 
