@@ -1,0 +1,23 @@
+---
+
+## ✅ 操作步骤（你来执行）：
+
+1. **创建 GitHub 仓库**：
+
+   登录 GitHub，点击右上角 "+" → New repository，名称建议：`vps-code`
+
+2. **本地初始化并上传：**
+
+```bash
+git clone https://github.com/ohbaby/vps-code.git
+cd vps-code
+
+# 创建文件
+nano vps-code.sh      # 粘贴脚本内容
+nano README.md        # 粘贴说明文档内容
+touch LICENSE         # 建议用 MIT 许可
+
+# 提交
+git add .
+git commit -m "初始化 VPS Code 脚本"
+git push origin main
