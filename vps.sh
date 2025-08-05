@@ -13,7 +13,7 @@ apt-get install -y openssl cron socat curl unzip vim wget
 
 # 第二步：安装 acme.sh 并申请证书
 echo "正在安装 acme.sh..."
-curl https://get.acme.sh | sh -s email=x@xx.xxx
+curl https://get.acme.sh | sh -s email=x@x.xxx
 if [ ! -f ~/.acme.sh/acme.sh ]; then
   echo "acme.sh 安装失败，请检查网络或手动安装！"
   exit 1
@@ -21,7 +21,7 @@ fi
 source ~/.bashrc
 acme.sh --set-default-ca --server buypass
 
-# 暂停并提示用户输入域名
+# 暂停并提示用户输入域名，替换 x.x.x 后继续
 echo "请在此输入您的域名（例如 example.com），输入后按回车继续："
 read -r DOMAIN
 while [ -z "$DOMAIN" ]; do
