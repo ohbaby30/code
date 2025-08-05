@@ -72,32 +72,31 @@ sleep 2
 # 更新系统并安装必要依赖（不安装 nginx）
 echo "📦 更新系统及安装依赖中..."
 apt-get update -y
-apt-get install -y openssl cron socat curl unzip vim wget net-tools
+apt-get install -y openssl cron socat curl unzip vim wget net-tools lsof
 
 # 确保80端口空闲
 echo "🔍 检查并释放80端口..."
 # 停止可能占用80端口的服务
 systemctl stop nginx || true
 systemctl stop apache2 || true
-pkill socat || true
-
-# 检查80端口是否被占用
-if netstat -tuln | grep -q ":80 "; then
-  echo "❗ 80端口仍然被占用，尝试查找并终止相关进程..."
-  # 获取占用80端口的进程ID
+echo "尝试杀死所有占用80端口的进程..."
+# 多次尝试杀死socat和其他占用80端口的进程
+for i in {1..3}; do
+  pkill -9 socat || true
   PID=$(lsof -t -i:80 || true)
   if [ -n "$PID" ]; then
     echo "找到占用80端口的进程（PID: $PID），正在终止..."
     kill -9 "$PID" || true
-  else
-    echo "❌ 无法确定占用80端口的进程，请手动检查并释放80端口后重试"
-    exit 1
   fi
-fi
+  sleep 1  # 等待1秒，确保进程完全终止
+done
 
-# 再次确认80端口是否空闲
+# 检查80端口是否空闲
 if netstat -tuln | grep -q ":80 "; then
-  echo "❌ 80端口仍然被占用，脚本无法继续执行，请手动检查并释放80端口"
+  echo "❌ 80端口仍然被占用！以下是占用80端口的进程信息："
+  lsof -i:80 || echo "无法获取占用80端口的进程信息"
+  echo "请手动检查并杀死占用80端口的进程（例如使用 'kill -9 <PID>'），然后重试脚本"
+  echo "提示：你可以运行 'lsof -i:80' 或 'netstat -tuln | grep :80' 查看占用情况"
   exit 1
 else
   echo "✅ 80端口已确认空闲"
@@ -111,7 +110,7 @@ export PATH="$HOME/.acme.sh:$PATH"
 
 # 申请证书 - 使用 standalone 模式
 echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
-~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
+~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256 --debug
 chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
 echo "✅ 证书申请完成"
