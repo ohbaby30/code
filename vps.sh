@@ -1,114 +1,99 @@
 #!/bin/bash
-set -e  # 有错误就停止执行
+set -e
 
-# 检查是否是 root 用户
+# 检查是否root
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ 请以 root 身份运行本脚本！（例如：sudo ./install.sh）"
+  echo "❌ 请用 root 权限运行脚本"
   exit 1
 fi
 
 echo ""
 echo "=============================="
-echo "🚀 Xray + Trojan 一键安装脚本"
+echo "🚀 Xray+Trojan 一键安装脚本"
 echo "=============================="
 echo ""
 
-##############################################
-# 🧩 第一步：让用户输入必要信息（明确停顿 + 确认）
-##############################################
+# 输入用于申请证书的邮箱
+while true; do
+  echo "✉️  请输入申请证书的邮箱（必须格式合法）："
+  read -rp "> " EMAIL
+  if [[ "$EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+    echo "✅ 邮箱格式正确：$EMAIL"
+    break
+  else
+    echo "❗ 邮箱格式错误，请重新输入"
+  fi
+done
+echo ""
 
 # 输入域名
 while true; do
-  echo -e "🌐 请输入你的域名（如：example.com）："
+  echo "🌐 请输入你的域名（如 example.com）："
   read -rp "> " DOMAIN
   if [ -n "$DOMAIN" ]; then
     echo "✅ 域名已确认：$DOMAIN"
     break
   else
-    echo "❗ 域名不能为空，请重新输入！"
+    echo "❗ 域名不能为空，请重新输入"
   fi
 done
 echo ""
 
-# 输入 UUID
+# 输入UUID
 while true; do
-  echo -e "🔑 请输入你的 VLESS UUID（如：550e8400-e29b-41d4-a716-446655440000）："
+  echo "🔑 请输入VLESS UUID（例如：550e8400-e29b-41d4-a716-446655440000）："
   read -rp "> " UUID
   if [ -n "$UUID" ]; then
-    echo "✅ UUID 已确认：$UUID"
+    echo "✅ UUID已确认：$UUID"
     break
   else
-    echo "❗ UUID 不能为空，请重新输入！"
+    echo "❗ UUID不能为空，请重新输入"
   fi
 done
 echo ""
 
-# 输入 Trojan 密码
+# 输入Trojan密码（隐藏输入）
 while true; do
-  echo -e "🔐 请输入你的 Trojan 密码（不会显示内容）："
+  echo "🔐 请输入Trojan密码（输入时不可见）："
   read -srp "> " TROJAN_PASS
   echo
   if [ -n "$TROJAN_PASS" ]; then
-    echo "✅ Trojan 密码已确认"
+    echo "✅ Trojan密码已确认"
     break
   else
-    echo "❗ 密码不能为空，请重新输入！"
+    echo "❗ 密码不能为空，请重新输入"
   fi
 done
 echo ""
-echo "🎯 所有输入已完成，开始执行自动部署..."
+
+echo "所有输入完成，开始安装部署..."
 sleep 2
 
-##############################################
-# 🛠️ 第二步：更新系统并安装工具
-##############################################
-
-echo "📦 安装必要系统工具..."
+# 更新系统并安装依赖
+echo "📦 更新系统及安装依赖中..."
 apt-get update -y
-apt-get install -y openssl cron socat curl unzip vim wget
+apt-get install -y openssl cron socat curl unzip vim wget nginx
 
-##############################################
-# 🔐 第三步：安装 acme.sh 并申请证书
-##############################################
-
-echo "🔐 安装 acme.sh..."
-curl https://get.acme.sh | sh -s email=chinainai0720@google.com
+# 安装acme.sh并注册账号
+echo "🔐 安装 acme.sh 并注册账号..."
+curl https://get.acme.sh | sh -s email="$EMAIL"
 export PATH="$HOME/.acme.sh:$PATH"
-
-if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
-  echo "❌ acme.sh 安装失败，请检查网络！"
-  exit 1
-fi
-
 ~/.acme.sh/acme.sh --set-default-ca --server buypass
 
-echo "📄 为 $DOMAIN 申请 ECC 证书中..."
+# 申请证书
+echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
 ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
-
 chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
 
-##############################################
-# 🌐 第四步：安装 nginx
-##############################################
+echo "✅ 证书申请完成"
 
-echo "🌐 安装 nginx..."
-apt install -y nginx
-echo "✅ nginx 安装完成，网站目录位于 /var/www/html，请根据需要自行修改页面"
-
-##############################################
-# 📦 第五步：安装 Xray
-##############################################
-
-echo "📦 安装 Xray..."
+# 安装xray
+echo "📦 安装 xray..."
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
 
-##############################################
-# 📝 第六步：生成 Xray 配置文件
-##############################################
-
-echo "📝 正在写入配置文件..."
-
+# 写入xray配置文件
+echo "📝 生成 xray 配置文件..."
 cat > /usr/local/etc/xray/config.json <<EOF
 {
   "log": {
@@ -176,17 +161,15 @@ cat > /usr/local/etc/xray/config.json <<EOF
 }
 EOF
 
-echo "✅ 配置文件写入成功：/usr/local/etc/xray/config.json"
+echo "✅ 配置文件写入完成"
 
-##############################################
-# 🚀 第七步：设置开机自启
-##############################################
-
+# 设置开机自启
+echo "🚀 设置 nginx 和 xray 开机自启..."
 systemctl enable nginx
 systemctl enable xray
 
 echo ""
-echo "🎉 所有安装已完成！你现在可以执行以下命令启动服务："
-echo "👉 systemctl restart nginx xray"
-echo "📄 网站目录：/var/www/html"
-echo "📁 配置路径：/usr/local/etc/xray/config.json"
+echo "🎉 安装完成！请执行命令启动服务："
+echo "   systemctl restart nginx xray"
+echo "网页目录：/var/www/html"
+echo "配置文件路径：/usr/local/etc/xray/config.json"
