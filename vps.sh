@@ -72,7 +72,7 @@ apt-get install -y openssl cron socat curl unzip vim wget
 ##############################################
 
 echo "🔐 安装 acme.sh..."
-curl https://get.acme.sh | sh -s email=my@example.com
+curl https://get.acme.sh | sh -s email=chinainai0720@google.com
 export PATH="$HOME/.acme.sh:$PATH"
 
 if [ ! -f "$HOME/.acme.sh/acme.sh" ]; then
