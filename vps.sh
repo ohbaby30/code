@@ -13,7 +13,7 @@ apt-get install -y openssl cron socat curl unzip vim wget
 
 # 第二步：安装 acme.sh 并申请证书
 echo "正在安装 acme.sh..."
-curl https://get.acme.sh | sh -s email=chinainai0123@gmail.com
+curl https://get.acme.sh | sh -s email=chi0123@gmail.com
 source ~/.bashrc
 acme.sh --set-default-ca --server buypass
 
