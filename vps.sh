@@ -106,7 +106,7 @@ fi
 echo "🔐 安装 acme.sh 并注册账号..."
 curl https://get.acme.sh | sh -s email="$EMAIL"
 export PATH="$HOME/.acme.sh:$PATH"
-~/.acme.sh/acme.sh --set-default-ca --server buypass
+# ~/.acme.sh/acme.sh --set-default-ca --server buypass
 
 # 申请证书 - 使用 standalone 模式
 echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
