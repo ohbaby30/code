@@ -85,6 +85,9 @@ echo "📄 为域名 $DOMAIN 申请 ECC 证书..."
 # 如果 nginx 可能已经安装并运行，先停止它，避免端口冲突
 systemctl stop nginx || true
 
+echo "杀掉残留的 socat 进程，避免端口冲突"
+pkill socat || true
+
 ~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
 chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
