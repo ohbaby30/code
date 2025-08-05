@@ -75,8 +75,8 @@ apt-get update -y
 apt-get install -y openssl cron socat curl unzip vim wget nginx
 
 # 确保 nginx 启动并开机自启
-systemctl enable nginx
-systemctl start nginx
+# systemctl enable nginx
+# systemctl start nginx
 
 # 确保 webroot 目录存在，默认 /var/www/html
 if [ ! -d /var/www/html ]; then
@@ -172,6 +172,7 @@ EOF
 
 # 设置 xray 开机自启
 systemctl enable xray
+systemctl enable nginx
 
 echo ""
 echo "🎉 安装完成！请执行命令启动服务："
