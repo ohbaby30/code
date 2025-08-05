@@ -1,22 +1,49 @@
 #!/bin/bash
 
-set -e  # 出错时终止脚本
+set -e  # 出错就退出
 
-# 检查是否以 root 身份运行
+# 确保以 root 运行
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ 请以 root 身份运行此脚本（例如 sudo ./install-vps.sh）"
+  echo "❌ 请以 root 身份运行此脚本！（例如 sudo ./install-vps.sh）"
   exit 1
 fi
 
-echo "🚀 开始搭建 VPS 环境..."
+####################### 第一步：用户输入信息 #######################
 
-############### 第一步：更新系统并安装工具 #################
+echo "============================="
+echo "🚀 VPS 搭建脚本开始执行"
+echo "请依次输入以下必要信息："
+echo "============================="
 
-echo "🛠️ 正在安装必要工具..."
+# 1. 读取域名
+read -rp "🌐 请输入你的域名（如 example.com）: " USER_DOMAIN
+while [ -z "$USER_DOMAIN" ]; do
+  read -rp "❗ 域名不能为空，请重新输入: " USER_DOMAIN
+done
+
+# 2. 读取 UUID
+read -rp "🔑 请输入你的 VLESS UUID（推荐使用 https://www.uuidgenerator.net/ 生成）: " USER_UUID
+while [ -z "$USER_UUID" ]; do
+  read -rp "❗ UUID 不能为空，请重新输入: " USER_UUID
+done
+
+# 3. 读取 Trojan 密码
+read -srp "🔐 请输入你的 Trojan 密码: " USER_TROJAN
+echo
+while [ -z "$USER_TROJAN" ]; do
+  read -srp "❗ 密码不能为空，请重新输入: " USER_TROJAN
+  echo
+done
+
+echo "✅ 信息已保存，开始自动部署..."
+
+####################### 第二步：更新系统并安装工具 #######################
+
+echo "🛠️ 正在更新系统并安装必要工具..."
 apt-get update -y
 apt-get install -y openssl cron socat curl unzip vim wget
 
-############### 第二步：安装 acme.sh #################
+####################### 第三步：安装 acme.sh 并申请证书 #######################
 
 echo "🔐 正在安装 acme.sh..."
 curl https://get.acme.sh | sh -s email=my@example.com
@@ -29,51 +56,30 @@ fi
 
 ~/.acme.sh/acme.sh --set-default-ca --server buypass
 
-# 输入域名
-read -rp "🌐 请输入你的域名（如：example.com）: " DOMAIN
-while [ -z "$DOMAIN" ]; do
-  read -rp "❗ 域名不能为空，请重新输入: " DOMAIN
-done
-
 # 申请证书
-echo "📄 正在为 $DOMAIN 申请证书..."
-~/.acme.sh/acme.sh --issue -d "$DOMAIN" --standalone -k ec-256
+echo "📄 正在为 $USER_DOMAIN 申请 ECC 证书..."
+~/.acme.sh/acme.sh --issue -d "$USER_DOMAIN" --standalone -k ec-256
 
-# 设置证书权限
-chmod 755 "/root/.acme.sh/${DOMAIN}_ecc"
+# 设置权限
+chmod 755 "/root/.acme.sh/${USER_DOMAIN}_ecc"
 
 # 设置自动更新
 ~/.acme.sh/acme.sh --upgrade --auto-upgrade
 
-############### 第三步：安装 nginx #################
+####################### 第四步：安装 nginx #######################
 
 echo "🌐 正在安装 nginx..."
-apt update && apt install -y nginx
+apt install -y nginx
 
-echo "✅ nginx 安装成功，请根据需要自行修改网站内容：/var/www/html"
+echo "✅ nginx 安装完成，请根据需要修改网站目录：/var/www/html"
 
-############### 第四步：安装 xray #################
+####################### 第五步：安装 xray #######################
 
 echo "📦 正在安装 xray..."
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
 
-############### 第五步：生成配置 #################
+####################### 第六步：生成配置文件 #######################
 
-# 输入 UUID
-read -rp "🔑 请输入 VLESS 的 UUID（推荐使用 https://www.uuidgenerator.net/ 生成）: " VLESS_ID
-while [ -z "$VLESS_ID" ]; do
-  read -rp "❗ UUID 不能为空，请重新输入: " VLESS_ID
-done
-
-# 输入 Trojan 密码
-read -srp "🔐 请输入 Trojan 的密码: " TROJAN_PASSWORD
-echo
-while [ -z "$TROJAN_PASSWORD" ]; do
-  read -srp "❗ 密码不能为空，请重新输入: " TROJAN_PASSWORD
-  echo
-done
-
-# 生成 xray 配置文件
 echo "📝 正在生成 Xray 配置文件..."
 
 cat > /usr/local/etc/xray/config.json <<EOF
@@ -88,7 +94,7 @@ cat > /usr/local/etc/xray/config.json <<EOF
             "settings": {
                 "clients": [
                     {
-                        "id": "$VLESS_ID",
+                        "id": "$USER_UUID",
                         "flow": "xtls-rprx-direct"
                     }
                 ],
@@ -106,8 +112,8 @@ cat > /usr/local/etc/xray/config.json <<EOF
                     "alpn": ["http/1.1"],
                     "certificates": [
                         {
-                            "certificateFile": "/root/.acme.sh/${DOMAIN}_ecc/fullchain.cer",
-                            "keyFile": "/root/.acme.sh/${DOMAIN}_ecc/${DOMAIN}.key"
+                            "certificateFile": "/root/.acme.sh/${USER_DOMAIN}_ecc/fullchain.cer",
+                            "keyFile": "/root/.acme.sh/${USER_DOMAIN}_ecc/${USER_DOMAIN}.key"
                         }
                     ]
                 }
@@ -120,7 +126,7 @@ cat > /usr/local/etc/xray/config.json <<EOF
             "settings": {
                 "clients": [
                     {
-                        "password": "$TROJAN_PASSWORD"
+                        "password": "$USER_TROJAN"
                     }
                 ],
                 "fallbacks": [
@@ -143,13 +149,13 @@ cat > /usr/local/etc/xray/config.json <<EOF
 }
 EOF
 
-echo "✅ Xray 配置文件已生成！"
+echo "✅ 配置文件已生成：/usr/local/etc/xray/config.json"
 
-############### 第六步：开机自启 #################
+####################### 第七步：开机自启 #######################
 
-echo "🚦 正在设置 nginx 和 xray 开机自启..."
+echo "🔧 正在设置开机自启..."
 systemctl enable nginx
 systemctl enable xray
 
-echo "🎉 搭建完成！你可以使用以下命令启动服务："
+echo "🎉 所有步骤完成！你现在可以运行以下命令启动服务："
 echo "👉 systemctl restart nginx xray"
